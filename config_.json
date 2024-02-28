@@ -1,0 +1,9 @@
+{
+	"base_dir": "",
+	"clouds_dir": "",
+	"t2s_dataset": "",
+	"render_dir": "",
+	"render_dir2": "",
+	"text_emb_dir": "",
+	"shapenet_partseg": ""
+}
