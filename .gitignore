@@ -1,0 +1,50 @@
+# Compiled python modules.
+*.pyc
+
+# Setuptools distribution folder, py.cache
+/dist/
+__pycache__/
+
+# Python egg metadata, regenerated from source files by setuptools.
+/*.egg-info
+
+# ShapeGlot downloaded data (and/or any derivatives stored her)
+data/*/*
+visualization/
+figures/*
+test/*
+=======
+
+# Jupyter.
+shapeglot/notebooks/.ipynb_checkpoints/*
+*.ipynb_checkpoints
+*.ipynb
+
+# Misc.
+*.so
+*.o
+*.swp
+
+# files used for debugging
+#*.csv
+#*.json
+#*.ipynb
+
+# experiments logging
+exps/*
+
+# wandb logs
+wandb/*
+
+# txt files
+#*.txt
+
+# log files
+*.log
+
+# OLD versions
+config.json
+sigLIP_ours.py
+sigLIP_accuracy_random_parallel.py
+tmp*
+results.json

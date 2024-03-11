@@ -1107,7 +1107,7 @@ class Text2Shape_unique_shapes_in_batch_2(): # Dataset
                 text_embed = text_embed[:max_length]       # truncate to max_length => [max_length, 1024]
                 
             # pad length to max_length_t2s
-            # add zeros at the end of text embed to reach max_length     
+            # add zeros at the end of text embed to reach max_length
             if not padding: #if the language model has not padded the embeddings, we have to do it by hand, to ensure correct batches in DataLoaders
                 pad = torch.zeros(max_length - text_embed.shape[0], text_embed.shape[1])
                 pad = pad.to(device)

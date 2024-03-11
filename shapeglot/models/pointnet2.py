@@ -13,8 +13,9 @@ from einops import repeat  # type: ignore
 from torch import Tensor
 from torch.nn import BatchNorm1d, Conv1d, Dropout, Linear, Module, ReLU, Sequential
 
-import sys
-sys.path.append('./shapeglot/models/') # cd is assumed to be config.base_dir
+import sys,os
+from inspect import getsourcefile
+sys.path.append(os.sep.join(os.path.abspath(getsourcefile(lambda:0)).split(os.sep)[:-1]))
 from pointnet import TNet
 from pointnet2_utils import PointNetFeaturePropagation
 from pointnet2_utils import PointNetSetAbstraction

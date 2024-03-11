@@ -1,24 +1,28 @@
 from my_config import get_config
 config = get_config()
 
+import sys
 ##########################################
-SHORTEN = 512 # False, 512,
+SHORTEN = 512 # 512,
 BUILD_CACHE = False #True
-batch_size = 32 # 2**6 max with SIGMOID  # Used for train and (if needed) test
+batch_size = 16 #int(sys.argv[1]) # 2**6 max with SIGMOID  # Used for train and (if needed) test
 val_batch_size = 2
 shape_embedding_dim = 1024      # 2048 when using the color-aware PcEncoder with embed size 2048, 1024 when using the standard PcEncoder and std color-aware PcEncoder
 text_embedding_dim = 1024       # 1024 when using T5 as text encoder   
 train_epochs = 45
 #reg_gamma = 0.001 #0.005       # Weight regularization on FC layers
 dataroot = config.t2s_dataset
-tmp_csv_root = config.t2s_dataset
+tmp_csv_root = config.t2s_csvs
 splits = ["train", "val"]
 categories = 'all'
 manual_text_embeds = False
-# Whether the CSV file to be used is the one with already batched data (in which shapes don't repeat) or not:
+# Whether the CSV file to be used is the one with already batched data (in which shapes don't repeat) or not;
+# Set to False to use the batching procedure described.
 CSV_IS_BATCHED = False
 LOSS = 'SIGMOID'
+USE_BT = (True and LOSS=='SIGMOID')
 output_dir = f"./exps/ignore"
+#output_dir = f"./exps/{LOSS}_bt={USE_BT}_TRAIN_3_{categories}_bs={batch_size}_duplicate"
 #output_dir = f"./exps/{LOSS}_loss_bt_TRAIN_3_{categories}_bs{batch_size}"  # Folder to save training data and checkpoints
 ##########################################
 
@@ -82,7 +86,7 @@ def main():
     
     if manual_text_embeds:
         lang_model_name = 't5-11b'  # see: https://huggingface.co/t5-11b
-        t5_tokenizer = T5Tokenizer.from_pretrained(lang_model_name) #T5 Tokenizer is based on SentencePiece tokenizer: explanation here https://huggingface.co/docs/transformers/tokenizer_summary
+        t5_tokenizer = T5Tokenizer.from_pretrained(lang_model_name)
         t5 = T5EncoderModel.from_pretrained(lang_model_name)
         t5 = t5.to(device)
     else:
@@ -238,7 +242,6 @@ def main():
     lr0 = 5.e-4      # original: 0.005
     lr_gamma = 0.95  # TR.2:0.95 #0.99
     EPOCHS_BEFORE_DECAY = 5
-    USE_BT = True
     ########################################
     
     #listener = Attention_Listener_Spatial(pointnet_color, mlp_decoder, device, dim=640, n_heads=8, d_head=64, context_dim=text_embedding_dim, gated_ff=True, align=False, only_cross=True, no_residual=True, no_toout=True).to(device) # 640 when using color-aware PcEncoder, otherwise 512
@@ -367,14 +370,12 @@ def main():
                             new_col_labels if phase=='train' else t_range)
                         loss =  (loss0+loss1)/2
                     elif LOSS=='SIGMOID':
-                        # TODO: L2 NORMZ ?
-                        # dot(zimg, ztxt.T)
                         if USE_BT:
                             logits = logits * torch.exp(listener.t) + listener.b
                         # -1 matrix, with diagonal 1, permuted:
-                        labels = ((2 * torch.eye(bs, device=device) - torch.ones(bs, device=device)))
+                        labels = (2 * torch.eye(bs, device=device) - torch.ones(bs, device=device))
                         if phase=='train':
-                            labels = labels[new_row_labels]
+                            labels = labels[new_row_labels]  # since permuting on outer dim (0)
                         loss = -torch.sum(log_sigmoid(labels * logits)) / bs
                     else:
                         raise NotImplementedError
@@ -387,10 +388,11 @@ def main():
                     
                     if phase=='train':
                         preds_ok_0 = torch.max(logits, dim=0)[1] == new_col_labels  # is each text associated to the right shape?
-                        preds_ok_1 = torch.max(logits, dim=1)[1] == new_row_labels # is each shape associated to the right text
+                        preds_ok_1 = torch.max(logits, dim=1)[1] == new_row_labels # is each shape associated to the right text?
+                        preds_ok_0 = preds_ok_0[new_col_labels]
                     else:
-                        preds_ok_0 = torch.max(logits, dim=0)[1] ==  t_range # is each text associated to the right shape
-                        preds_ok_1 = torch.max(logits, dim=1)[1] == t_range # is each shape associated to the right text
+                        preds_ok_0 = torch.max(logits, dim=0)[1] ==  t_range # is each text associated to the right shape?
+                        preds_ok_1 = torch.max(logits, dim=1)[1] == t_range # is each shape associated to the right text?
                     
                     preds_ok = torch.logical_and(preds_ok_0, preds_ok_1).count_nonzero()
                     
@@ -421,16 +423,9 @@ def main():
                 # statistics
                 running_loss += loss.item() * bs  # --- CHECK ---
                 running_corrects += torch.sum(preds_ok)
-                running_corrects_txt += torch.sum(preds_ok_0)
+                running_corrects_txt += torch.sum(preds_ok_0) # n. of texts assoc. to the right shape
                 running_corrects_shp += torch.sum(preds_ok_1)
         
-            '''
-            tensor([[-1.1118, -1.0981, -1.1133, -1.1048],
-        [-1.1014, -1.0976, -1.0884, -1.1121],
-        [-1.1021, -1.1015, -1.1173, -1.0924],
-        [-1.1094, -1.1152, -1.0903, -1.0911]], device='cuda:3',
-       grad_fn=<DivBackward0>)
-            '''
             n_examples = n_batches * bs  # ASSUMING drop_last=True
             logger.info(f'n_examples_{phase}: {n_examples}')
             epoch_loss = running_loss / n_examples
@@ -458,7 +453,7 @@ def main():
                         'optimizer_state': optimizer.state_dict()
                     }
                     torch.save(save_dict, os.path.join(output_dir, f'checkpoint_{epoch}.pth'))
-        
+            
             if phase=='val':
                 # CHECKPOINT!
                 if epoch_acc > former_best_epoch_acc:
@@ -471,6 +466,7 @@ def main():
                     torch.save(save_dict, os.path.join(output_dir, f'checkpoint_{epoch}.pth'))
                     former_best_epoch_acc = epoch_acc
             
+            writer.flush()
         # end for phase...
 
         # compute accuracy on Human Test Set
@@ -480,18 +476,18 @@ def main():
             tot = 0
             for i, sample in enumerate(humaneval_dl):
                 listener.eval()
-                clouds = sample["clouds"].to(device)
-                target = sample["target"].to(device)    
-                text_embed = sample["text_embed"].to(device)
-                s1, sr = clouds.shape[0], clouds.shape[2:]   # assert clouds.shape[1]==2
+                clouds = sample["clouds"].to(device)  # [4, 2, 2048, 6])
+                target = sample["target"].to(device)  # [4], either 0 or 1
+                text_embed = sample["text_embed"].to(device)  # [4, 77, 1024])
+                s1, sr = clouds.shape[0], clouds.shape[2:]   # (4, ([2048, 6]))
                 tot += s1
-                mids = sample['mids']
+                mids = sample['mids']  # list of 2 tuples of len 4
                 ids = [mids[j][i] for i in range(0, len(mids[0])) for j in (0,1) ]  # mids[0] and mids[1] interleaved
                 logits = listener(
                     clouds.view(s1*2, *sr),
                     text_embed.repeat((2, *([1]*(len(text_embed.shape))))).permute(1,0,2,3).reshape(2*s1, *text_embed.shape[1:]),
                     ids=ids,
-                ).view(-1,2)
+                ).view(-1,2)  # [4,2]
                 
                 _, preds = torch.max(logits, 1)
                 running_corrects_human += torch.sum(preds == target)
@@ -510,6 +506,8 @@ def main():
             print(end='\r')
             logger.info('%d Epoch |  Human Test Acc:%4.4f (%s examples) '% (epoch, epoch_acc_human, tot))
             writer.add_scalar(f'human_acc', epoch_acc_human, epoch)
+            writer.flush()
+            torch.cuda.empty_cache()  # release to OS unused cache
         
         '''
         if phase == 'val':

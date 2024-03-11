@@ -14,6 +14,8 @@ class Config:
         self.render_dir = c['render_dir']
         self.render_dir2 = c['render_dir2']
         self.text_emb_dir = c['text_emb_dir']
+        self.shapenet_partseg = c['shapenet_partseg']
+        self.t2s_csvs = c['t2s_csvs']
 		
 		
 def get_config(config_file=f'{this_folder}config.json'):

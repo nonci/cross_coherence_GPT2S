@@ -41,7 +41,7 @@ config = get_config()
 #DEF_CKPT = './exps/SIGMOID_loss_bt_TRAIN_1_all_bs16/checkpoint_30.pth'
 #DEF_CKPT = './exps/SIGMOID_loss_simplif_1e-4_all/checkpoint_16.pth'
 #DEF_CKPT = './exps/SIGMOID_loss_bt_TRAIN_3_all_bs16/checkpoint_13.pth'
-DEF_CKPT = '' #./exps/CLIP_loss_bt_TRAIN_3_chair_bs16/checkpoint_3.pth'
+DEF_CKPT = './exps/SIGMOID_bt=True_TRAIN_3_all_bs=16/checkpoint_6.pth'
 LOSS = 'SIGMOID'
 # LOSS and DEF_CKPT must be coherent: if you try to load a checkpoint from an
 # architectures trained with another loss you should manually take care of b and t
@@ -164,7 +164,7 @@ def main():
                                                  lang_tokenizer = t5_tokenizer,
                                                 t2s_root=Path(args.t2s_root),
                                                 categories=args.category,
-                                                restrict_to = ['t2s'],
+                                                #restrict_to = ['t2s'],
                                                 from_shapenet_v1=False,
                                                 from_shapenet_v2=False,
                                                 language_model="t5-11b",
@@ -249,6 +249,7 @@ def main():
                 print('Dataset Size: ', len(datasets[phase]))
                 count_wrong = {}
                 results = []
+                all_wrong = []  # wrong triplets, for debugging and final tests
                 for idx, sample in enumerate(tqdm(dataloaders[phase], desc=f"{phase} set")):                    
                     
                     clouds = sample["clouds"].to(device)
@@ -348,7 +349,12 @@ def main():
                         wrong_idxs = sample["idx"][list_wrong]
                         wrong_indices = [i for i, x in enumerate(list_wrong) if x == True]
                         wrong_texts = [texts[i] for i in wrong_indices]
-
+                        all_wrong += list (zip([e for i,e in enumerate(sample['mids'][0]) if list_wrong[i]],
+                                             [e for i,e in enumerate(sample['mids'][1]) if list_wrong[i]],
+                                             [t_ for i,t_ in enumerate(sample['text']) if list_wrong[i]],
+                                             [t.item() for i,t in enumerate(target) if list_wrong[i]],
+                                             [l for i,l in enumerate(logits) if list_wrong[i]]
+                                           ) )
                         ## Saving results to file
                         with open(os.path.join(args.output_dir, 'wrong_ids_attnglot.txt'), 'w') as f:
                             for i in range(wrong_idxs.shape[0]):
@@ -379,6 +385,8 @@ def main():
                 n_examples = len(dataloaders[phase].dataset)
                 
                 acc[phase] = running_corrects[phase].double() / n_examples
+                
+                print(all_wrong[:10])
                 
                 accuracies[phase] = np.concatenate([accuracies[phase], np.expand_dims(acc[phase].cpu().numpy(), axis=0)], axis=0)
 

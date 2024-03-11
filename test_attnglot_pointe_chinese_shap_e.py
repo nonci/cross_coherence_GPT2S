@@ -2,13 +2,15 @@
 Most of the original file removed.
 '''
 
-import json
+import json, os
 import sys
 sys.path.append("../Infusion")
 from data.text2shape_dataset import Text2Shape, Text2Shape_pairs, Text2Shape_pairs_easy_hard, Text2Shape_humaneval, visualize_data_sample, visualize_data_sample_color, shuffle_ids
 
 from pathlib import Path
 from tqdm import tqdm
+import torch
+from pytorch3d.io import IO
 
 from my_config import get_config
 config = get_config()
@@ -70,3 +72,31 @@ def build_mids_texts_tensornames(json_path, device):
             new_list.append(d)
 
     return new_list         # len: 1749
+
+def normalize_pointcloud(pc):
+    # "shapenet_v1_norm" normalization  
+    pc_max, _ = pc[:,:3].max(dim=0, keepdim=True) # (1, 3)
+    pc_min, _ = pc[:,:3].min(dim=0, keepdim=True) # (1, 3)
+    shift = ((pc_min + pc_max) / 2).view(1, 3)
+    scale = torch.linalg.norm(pc_max - pc_min).reshape(1, 1)
+          
+    pc[:,:3] = (pc[:,:3] - shift) / scale
+    return pc
+
+def get_hst_cloud(gt_mid, data_path, normalize=True):
+    filename = f'{gt_mid}.ply'
+    filepath = os.path.join(data_path, filename)
+    torch_cloud = IO().load_pointcloud(filepath)
+    points = torch_cloud.points_list()[0]
+    if torch_cloud.features_list() is not None:
+        colors = torch_cloud.features_list()[0]
+        pc = torch.stack((points, colors), dim=1)
+        pc = pc.reshape(-1, 6)
+    else:
+        pc = points
+    
+    if normalize:
+        # normalize pointcloud
+        pc = normalize_pointcloud(pc)
+
+    return pc, filepath
