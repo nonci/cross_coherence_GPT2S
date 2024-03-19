@@ -1,2 +1,1 @@
-# Warning
-This repo contains "dirty" experimental code; do not use it for production.
+### Enhancing a text-shape coherence metric by leveraging contrastive losses and a lage-scale dataset.
